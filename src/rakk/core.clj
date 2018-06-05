@@ -67,6 +67,11 @@
       (attr/remove-attr node :value)))
 
 
+(defn clear-function
+  [g node value]
+  (attr/remove-attr g node :function))
+
+
 (defn flow-starts
   "This function is necessary to compute the correct starts for
   dataflow analysis. If only one predecessor of a node is changed, it
