@@ -3,19 +3,6 @@
             [loom.attr :as attr]
             [loom.dataflow :as df]))
 
-(def gr
-  (-> (graph/digraph [:a :c]
-                     [:b :c]
-                     [:c :d]
-                     [:f :g])
-      (attr/add-attr :a :value 10)
-      (attr/add-attr :b :value 20)
-      (attr/add-attr :c :function (fn [a b] (+ a b)))
-      (attr/add-attr :d :function (fn [x] (* 2 x)))
-
-      (attr/add-attr :f :value 33)
-      (attr/add-attr :g :function (fn [x] (* 100 x)))))
-
 
 (defn value [g node]
   (attr/attr g node :value))
@@ -26,7 +13,11 @@
     (zipmap nodes (map #(value g %) nodes))))
 
 
-(defn flow [g start]
+(defn inputs [g]
+  (remove #(attr/attr g % :function) (graph/nodes g)))
+
+
+(defn flow [g starts]
   ;; df/dataflow-analysis will return a map of the new values that
   ;; were produced. What this map contains (and which parts of the
   ;; graph were analysed) depends on what start nodes are passed,
@@ -35,15 +26,20 @@
   ;;
   ;; This is a bit of a naive implementation because it does not
   ;; guarantee any order for the arguments
-  (df/dataflow-analysis
-   {:start    start
-    :graph    g
-    :join     identity
-    :transfer (fn [node args]
-                (prn node args)
-                (if-let [f (attr/attr g node :function)]
-                  (apply f args)
-                  (value g node)))}))
+  (->> (df/dataflow-analysis
+        {:start    starts
+         :graph    g
+         :join     identity
+         :transfer (fn [node args]
+                     (prn node args)
+                     (if-let [f (attr/attr g node :function)]
+                       {:node  node
+                        :value (f (zipmap (map :node args)
+                                          (map :value args)))}
+                       {:node  node
+                        :value (value g node)}))})
+       (reduce (fn [m [_ {:keys [node value] :as v}]]
+                 (assoc m node value)) {})))
 
 
 (defn set-attrs
@@ -57,6 +53,18 @@
   "Set :value attribute of multiple nodes"
   [g new-values]
   (set-attrs g :value new-values))
+
+
+(defn set-value
+  [g node value]
+  (attr/add-attr g node :value value))
+
+
+(defn set-function
+  [g node value]
+  (-> g
+      (attr/add-attr node :function value)
+      (attr/remove-attr node :value)))
 
 
 (defn flow-starts
@@ -78,5 +86,26 @@
     (set-values new-graph out-values)))
 
 
+(defn init [g]
+  (set-values g (flow g (inputs g))))
+
+
 (defn mutate! [graph-atom new-inputs]
   (swap! graph-atom advance new-inputs))
+
+
+(comment
+  (def gr
+    (-> (graph/digraph [:a :c]
+                       [:b :c]
+                       [:c :d]
+                       [:f :g])
+        (attr/add-attr :a :value 10)
+        (attr/add-attr :b :value 20)
+        (attr/add-attr :c :function (fn [{:keys [a b]}] (+ a b)))
+        (attr/add-attr :d :function (fn [{:keys [c]}] (* 2 c)))
+
+        (attr/add-attr :f :value 33)
+        (attr/add-attr :g :function (fn [{:keys [f]}] (* 100 f)))))
+
+  (-> gr init (advance {:a 100})))
