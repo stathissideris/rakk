@@ -57,19 +57,27 @@
 
 (defn set-value
   [g node value]
-  (attr/add-attr g node :value value))
+  (let [g (if (graph/has-node? g node)
+            g
+            (graph/add-nodes g node))]
+    (attr/add-attr g node :value value)))
 
 
 (defn set-function
   [g node value]
-  (-> g
-      (attr/add-attr node :function value)
-      (attr/remove-attr node :value)))
+  (let [g (if (graph/has-node? g node)
+            g
+            (graph/add-nodes g node))]
+    (-> g
+        (attr/add-attr node :function value)
+        (attr/remove-attr node :value))))
 
 
 (defn clear-function
-  [g node value]
-  (attr/remove-attr g node :function))
+  [g node]
+  (if (graph/has-node? g node)
+    (attr/remove-attr g node :function)
+    g))
 
 
 (defn flow-starts
