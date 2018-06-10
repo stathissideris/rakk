@@ -55,22 +55,25 @@
   (set-attrs g :value new-values))
 
 
+(defn ensure-node [g node]
+  (if (graph/has-node? g node)
+    g
+    (graph/add-nodes g node)))
+
+
 (defn set-value
   [g node value]
-  (let [g (if (graph/has-node? g node)
-            g
-            (graph/add-nodes g node))]
-    (attr/add-attr g node :value value)))
+  (-> g
+      (ensure-node node)
+      (attr/add-attr node :value value)))
 
 
 (defn set-function
   [g node value]
-  (let [g (if (graph/has-node? g node)
-            g
-            (graph/add-nodes g node))]
-    (-> g
-        (attr/add-attr node :function value)
-        (attr/remove-attr node :value))))
+  (-> g
+      (ensure-node node)
+      (attr/add-attr node :function value)
+      (attr/remove-attr node :value)))
 
 
 (defn clear-function
