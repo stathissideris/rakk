@@ -23,23 +23,22 @@
   ;; graph were analysed) depends on what start nodes are passed,
   ;; which is great, because you can use that property to avoid
   ;; recalculating values that are not affected by changes.
-  ;;
-  ;; This is a bit of a naive implementation because it does not
-  ;; guarantee any order for the arguments
-  (->> (df/dataflow-analysis
-        {:start    starts
-         :graph    g
-         :join     identity
-         :transfer (fn [node args]
-                     (prn node args)
-                     (if-let [f (attr/attr g node :function)]
-                       {:node  node
-                        :value (f (zipmap (map :node args)
-                                          (map :value args)))}
-                       {:node  node
-                        :value (value g node)}))})
-       (reduce (fn [m [_ {:keys [node value] :as v}]]
-                 (assoc m node value)) {})))
+  (if-not (seq starts)
+    {}
+    (->> (df/dataflow-analysis
+          {:start    starts
+           :graph    g
+           :join     identity
+           :transfer (fn [node args]
+                       (prn node args)
+                       (if-let [f (attr/attr g node :function)]
+                         {:node  node
+                          :value (f (zipmap (map :node args)
+                                            (map :value args)))}
+                         {:node  node
+                          :value (value g node)}))})
+         (reduce (fn [m [_ {:keys [node value] :as v}]]
+                   (assoc m node value)) {}))))
 
 
 (defn set-attrs
@@ -47,12 +46,6 @@
   [g attr new-attrs]
   (reduce (fn [gr [node value]]
             (attr/add-attr gr node attr value)) g new-attrs))
-
-
-(defn set-values
-  "Set :value attribute of multiple nodes"
-  [g new-values]
-  (set-attrs g :value new-values))
 
 
 (defn ensure-node [g node]
@@ -66,6 +59,14 @@
   (-> g
       (ensure-node node)
       (attr/add-attr node :value value)))
+
+
+(defn set-values
+  "Set :value attribute of multiple nodes"
+  [g new-values]
+  (reduce (fn [g [node value]]
+            (set-value g node value))
+          g new-values))
 
 
 (defn set-function
@@ -96,18 +97,15 @@
 
 
 (defn advance
-  [g new-inputs]
+  [g new-inputs extra-starts]
   (let [new-graph  (set-values g new-inputs)
-        out-values (flow new-graph (flow-starts g (keys new-inputs)))]
+        out-values (flow new-graph (into (flow-starts g (keys new-inputs))
+                                         extra-starts))]
     (set-values new-graph out-values)))
 
 
 (defn init [g]
   (set-values g (flow g (inputs g))))
-
-
-(defn mutate! [graph-atom new-inputs]
-  (swap! graph-atom advance new-inputs))
 
 
 (comment
