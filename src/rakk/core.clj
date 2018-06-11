@@ -30,11 +30,13 @@
            :graph    g
            :join     identity
            :transfer (fn [node args]
-                       (prn node args)
                        (if-let [f (attr/attr g node :function)]
-                         {:node  node
-                          :value (f (zipmap (map :node args)
-                                            (map :value args)))}
+                         (if (every? nil? args) ;;function node is passed empty args, means it's a start node itself
+                           {:node  node
+                            :value (attr/attr g node :value)}
+                           {:node  node
+                            :value (f (zipmap (map :node args)
+                                              (map :value args)))})
                          {:node  node
                           :value (value g node)}))})
          (reduce (fn [m [_ {:keys [node value] :as v}]]
