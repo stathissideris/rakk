@@ -5,7 +5,9 @@
 
 
 (defn value [g node]
-  (attr/attr g node :value))
+  (try ;;in case it doesn't exist
+    (attr/attr g node :value)
+    (catch Exception _ nil)))
 
 
 (defn values [g]
