@@ -47,11 +47,12 @@
        :value (attr/attr g node :value)}
       (if (some :error args)
         {:node  node
+         :value :rakk/error
          :error (ex-info "Some upstream cells contain errors"
                          {:upstream-errors (filter :error args)})}
         (let [v (apply-fn f args)]
           (if (::error v)
-            {:node node :value ::error :error (::error v)}
+            {:node node :value :rakk/error :error (::error v)}
             {:node node :value v}))))
     {:node  node
      :value (value g node)}))
