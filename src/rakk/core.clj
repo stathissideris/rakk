@@ -10,6 +10,12 @@
     (catch Exception _ nil)))
 
 
+(defn error [g node]
+  (try ;;in case it doesn't exist
+    (attr/attr g node :error)
+    (catch Exception _ nil)))
+
+
 (defn values [g]
   (let [nodes (graph/nodes g)]
     (zipmap nodes (map #(value g %) nodes))))
@@ -17,6 +23,38 @@
 
 (defn inputs [g]
   (remove #(attr/attr g % :function) (graph/nodes g)))
+
+
+(defn- apply-fn
+  "Calls f by passing a map of node name to node value. Catch all
+  exceptions and return them wrapped in a map under the ::error key."
+  [f args]
+  (try (f (zipmap (map :node args)
+                  (map :value args)))
+       (catch Exception e
+         {::error e})))
+
+
+(defn- transfer
+  "Transfer function for dataflow analysis. "
+  [g node args]
+  (if-let [f (attr/attr g node :function)]
+    (if (every? nil? args)
+      ;; function node is passed empty args, means it's a start node
+      ;; itself (but not an input nod). In that case we just use the
+      ;; cached value
+      {:node  node
+       :value (attr/attr g node :value)}
+      (if (some :error args)
+        {:node  node
+         :error (ex-info "Some upstream cells contain errors"
+                         {:upstream-errors (filter :error args)})}
+        (let [v (apply-fn f args)]
+          (if (::error v)
+            {:node node :value ::error :error (::error v)}
+            {:node node :value v}))))
+    {:node  node
+     :value (value g node)}))
 
 
 (defn flow [g starts]
@@ -31,18 +69,8 @@
           {:start    starts
            :graph    g
            :join     identity
-           :transfer (fn [node args]
-                       (if-let [f (attr/attr g node :function)]
-                         (if (every? nil? args) ;;function node is passed empty args, means it's a start node itself
-                           {:node  node
-                            :value (attr/attr g node :value)}
-                           {:node  node
-                            :value (f (zipmap (map :node args)
-                                              (map :value args)))})
-                         {:node  node
-                          :value (value g node)}))})
-         (reduce (fn [m [_ {:keys [node value] :as v}]]
-                   (assoc m node value)) {}))))
+           :transfer (partial transfer g)})
+         vals)))
 
 
 (defn set-attrs
@@ -60,9 +88,11 @@
 
 (defn set-value
   [g node value]
-  (-> g
-      (ensure-node node)
-      (attr/add-attr node :value value)))
+  (if-not value
+    g
+    (-> g
+        (ensure-node node)
+        (attr/add-attr node :value value))))
 
 
 (defn set-values
@@ -73,11 +103,27 @@
           g new-values))
 
 
+(defn set-error
+  [g node error]
+  (if-not error
+    g
+    (-> g
+        (ensure-node node)
+        (attr/add-attr node :error error))))
+
+
+(defn set-errors
+  [g new-errors]
+  (reduce (fn [g [node error]]
+            (set-error g node error))
+          g new-errors))
+
+
 (defn set-function
-  [g node value]
+  [g node function]
   (-> g
       (ensure-node node)
-      (attr/add-attr node :function value)
+      (attr/add-attr node :function function)
       (attr/remove-attr node :value)))
 
 
@@ -102,14 +148,22 @@
 
 (defn advance
   [g new-inputs extra-starts]
-  (let [new-graph  (set-values g new-inputs)
-        out-values (flow new-graph (into (flow-starts g (keys new-inputs))
-                                         extra-starts))]
-    (set-values new-graph out-values)))
+  (let [new-graph (set-values g new-inputs)
+        outcomes  (flow new-graph (into (flow-starts g (keys new-inputs))
+                                        extra-starts))]
+    (-> new-graph
+        (set-values (into {} (map (juxt :node :value) outcomes)))
+        (set-errors (into {} (map (juxt :node :error) outcomes))))))
 
 
 (defn init [g]
-  (set-values g (flow g (inputs g))))
+  (let [outcomes (flow g (inputs g))]
+    (-> g
+        (set-values (into {} (map (juxt :node :value) outcomes)))
+        (set-errors (into {} (map (juxt :node :error) outcomes))))))
+
+
+(defn make [] (graph/digraph))
 
 
 (comment
