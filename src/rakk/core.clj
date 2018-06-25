@@ -16,6 +16,15 @@
     (catch Exception _ nil)))
 
 
+(defn error-info [g node]
+  (let [error? (= :rakk/error (value g node))]
+    {:rakk/error?     error?
+     :rakk/error      (when error? (error g node))
+     :rakk/error-type (cond (not error?)                                                :none
+                            (some-> g (error node) ex-data :rakk/secondary-error some?) :secondary
+                            :else                                                       :primary)}))
+
+
 (defn values [g]
   (let [nodes (graph/nodes g)]
     (zipmap nodes (map #(value g %) nodes))))
@@ -49,7 +58,8 @@
         {:node  node
          :value :rakk/error
          :error (ex-info "Some upstream cells contain errors"
-                         {:upstream-errors (filter :error args)})}
+                         {:rakk/secondary-error true
+                          :rakk/upstream-errors (filter :error args)})}
         (let [v (apply-fn f args)]
           (if (::error v)
             {:node node :value :rakk/error :error (::error v)}
