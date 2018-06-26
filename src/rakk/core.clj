@@ -150,6 +150,11 @@
     g))
 
 
+(defn clear-functions
+  [g nodes]
+  (reduce clear-function g nodes))
+
+
 (defn flow-starts
   "This function is necessary to compute the correct starts for
   dataflow analysis. If only one predecessor of a node is changed, it
@@ -164,7 +169,9 @@
 
 (defn advance
   [g new-inputs extra-starts]
-  (let [new-graph (set-values g new-inputs)
+  (let [new-graph (-> g
+                      (set-values new-inputs)
+                      (clear-functions (keys new-inputs))) ;;cleanup in case it used to be a function
         outcomes  (flow new-graph (into (flow-starts g (keys new-inputs))
                                         extra-starts))]
     (-> new-graph
