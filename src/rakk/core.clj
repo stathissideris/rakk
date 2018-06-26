@@ -16,8 +16,12 @@
     (catch Exception _ nil)))
 
 
+(defn error? [g node]
+  (= :rakk/error (value g node)))
+
+
 (defn error-info [g node]
-  (let [error? (= :rakk/error (value g node))]
+  (let [error? (error? g node)]
     {:rakk/error?     error?
      :rakk/error      (when error? (error g node))
      :rakk/error-type (cond (not error?)                                                :none
@@ -52,8 +56,12 @@
       ;; function node is passed empty args, means it's a start node
       ;; itself (but not an input nod). In that case we just use the
       ;; cached value
-      {:node  node
-       :value (attr/attr g node :value)}
+      (if (error? g node)
+        {:node  node
+         :value (value g node)
+         :error (error g node)}
+        {:node  node
+         :value (value g node)})
       (if (some :error args)
         {:node  node
          :value :rakk/error
@@ -99,11 +107,9 @@
 
 (defn set-value
   [g node value]
-  (if-not value
-    g
-    (-> g
-        (ensure-node node)
-        (attr/add-attr node :value value))))
+  (-> g
+      (ensure-node node)
+      (attr/add-attr node :value value)))
 
 
 (defn set-values
@@ -116,11 +122,10 @@
 
 (defn set-error
   [g node error]
-  (if-not error
-    g
-    (-> g
-        (ensure-node node)
-        (attr/add-attr node :error error))))
+  (let [g (ensure-node g node)]
+    (if error
+      (attr/add-attr g node :error error)
+      (attr/remove-attr g node :error))))
 
 
 (defn set-errors
