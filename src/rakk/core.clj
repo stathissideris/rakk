@@ -17,7 +17,7 @@
 
 
 (defn error? [g node]
-  (= :rakk/error (value g node)))
+  (some? (error g node)))
 
 
 (defn error-info [g node]
@@ -42,6 +42,7 @@
   "Calls f by passing a map of node name to node value. Catch all
   exceptions and return them wrapped in a map under the ::error key."
   [f args]
+  (prn 'apply-fn (.getName (Thread/currentThread)))
   (try (f (zipmap (map :node args)
                   (map :value args)))
        (catch Exception e
@@ -52,9 +53,9 @@
   "Transfer function for dataflow analysis. "
   [g node args]
   (if-let [f (attr/attr g node :function)]
-    (if (every? nil? args)
+    (if (and (not (empty? args)) (every? nil? args))
       ;; function node is passed empty args, means it's a start node
-      ;; itself (but not an input nod). In that case we just use the
+      ;; itself (but not an input node). In that case we just use the
       ;; cached value
       (if (error? g node)
         {:node  node
@@ -155,6 +156,13 @@
   (reduce clear-function g nodes))
 
 
+(defn set-error
+  [g node error]
+  (-> g
+      (ensure-node node)
+      (attr/add-attr node :error error)))
+
+
 (defn flow-starts
   "This function is necessary to compute the correct starts for
   dataflow analysis. If only one predecessor of a node is changed, it
@@ -179,7 +187,7 @@
         (set-errors (into {} (map (juxt :node :error) outcomes))))))
 
 
-(defn init [g]
+(defn recalc [g]
   (let [outcomes (flow g (inputs g))]
     (-> g
         (set-values (into {} (map (juxt :node :value) outcomes)))
@@ -203,4 +211,4 @@
         (attr/add-attr :f :value 33)
         (attr/add-attr :g :function (fn [{:keys [f]}] (* 100 f)))))
 
-  (-> gr init (advance {:a 100})))
+  (-> gr recalc (advance {:a 100})))
