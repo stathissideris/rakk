@@ -46,14 +46,28 @@
               (sut/set-value :a 10)
               (sut/set-value :b 20)
               (sut/set-function :c (fn [{:keys [a b]}] (+ a b)))
-              (sut/set-function :d (fn [{:keys [d]}] (+ d 10)))
+              (sut/set-function :d (fn [{:keys [c]}] (* c 2)))
               (graph/add-edges [:a :c] [:b :c] [:c :d]))]
+    (is (= {:a 10 :b 20 :c 30 :d 60} (sut/values (sut/recalc g))))
     (is (-> g
             (sut/kill #{:a})
             (sut/error? :c)))
     (is (-> g
             (sut/kill #{:a})
             (sut/error? :d)))))
+
+(deftest remove-test
+  (let [g (-> (sut/make)
+              (sut/set-value :a 10)
+              (sut/set-value :b 20)
+              (sut/set-function :c (fn [in] (apply + (vals in))))
+              (sut/set-function :d (fn [{:keys [c]}] (* c 2)))
+              (graph/add-edges [:a :c] [:b :c] [:c :d]))]
+    (is (= {:a 10 :b 20 :c 30 :d 60} (sut/values (sut/recalc g))))
+    (is (= {:b 20 :c 20 :d 40}
+           (-> g
+               (sut/remove #{:a})
+               sut/values)))))
 
 (deftest error-handling-test
   (let [g (-> (sut/make)

@@ -1,4 +1,5 @@
 (ns rakk.core
+  (:refer-clojure :exclude [remove])
   (:require [loom.graph :as graph]
             [loom.attr :as attr]
             [loom.dataflow :as df]))
@@ -35,7 +36,7 @@
 
 
 (defn inputs [g]
-  (remove #(attr/attr g % :function) (graph/nodes g)))
+  (clojure.core/remove #(attr/attr g % :function) (graph/nodes g)))
 
 
 (defn- apply-fn
@@ -180,12 +181,23 @@
 
 
 (defn kill
-  "Remove a set of nodes so that downstream nodes come into an errored state
-  because they are referring to dead nodes"
+  "Remove a set of nodes so that downstream nodes enter an error state because
+  they are referring to dead nodes."
   [g nodes]
   (-> g
       (set-errors (zipmap nodes (repeat ::dead)))
       (advance nil nodes)))
+
+(defn remove
+  "Remove nodes in an orderly manner, by removing them from the graph and also
+  removing their downstream edges. Used for when downstream nodes are tolerant
+  of removals of upstream deps."
+  [g nodes]
+  (let [downstream (mapcat (partial graph/successors g) nodes)]
+    (as-> g _
+      (apply graph/remove-nodes _ nodes)
+      (update _ :attrs #(apply dissoc % nodes))
+      (advance _ nil (mapcat (partial graph/predecessors _) downstream)))))
 
 
 (defn recalc [g]
