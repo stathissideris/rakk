@@ -41,6 +41,20 @@
                sut/recalc
                sut/values)))))
 
+(deftest kill-test
+  (let [g (-> (sut/make)
+              (sut/set-value :a 10)
+              (sut/set-value :b 20)
+              (sut/set-function :c (fn [{:keys [a b]}] (+ a b)))
+              (sut/set-function :d (fn [{:keys [d]}] (+ d 10)))
+              (graph/add-edges [:a :c] [:b :c] [:c :d]))]
+    (is (-> g
+            (sut/kill #{:a})
+            (sut/error? :c)))
+    (is (-> g
+            (sut/kill #{:a})
+            (sut/error? :d)))))
+
 (deftest error-handling-test
   (let [g (-> (sut/make)
               (sut/set-value :a 10)
@@ -53,4 +67,4 @@
     (is (= {:c 30 :b 20 :d 11/6 :a 10 :e 41/6} (sut/values (sut/recalc g))))
     (is (= {:a 0 :b 0 :c 0 :d :rakk/error :e :rakk/error} (-> g (sut/advance {:a 0 :b 0} []) sut/values)))
     (is (instance? Exception (-> g (sut/advance {:a 0 :b 0} []) (rakk.core/error :d))))
-    (is (= :d (-> g (sut/advance {:a 0 :b 0} []) (rakk.core/error :e) ex-data :upstream-errors first :node)))))
+    (is (= :d (-> g (sut/advance {:a 0 :b 0} []) (rakk.core/error :e) ex-data :rakk/upstream-errors first :node)))))

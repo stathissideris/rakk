@@ -42,7 +42,6 @@
   "Calls f by passing a map of node name to node value. Catch all
   exceptions and return them wrapped in a map under the ::error key."
   [f args]
-  (prn 'apply-fn (.getName (Thread/currentThread)))
   (try (f (zipmap (map :node args)
                   (map :value args)))
        (catch Exception e
@@ -156,13 +155,6 @@
   (reduce clear-function g nodes))
 
 
-(defn set-error
-  [g node error]
-  (-> g
-      (ensure-node node)
-      (attr/add-attr node :error error)))
-
-
 (defn flow-starts
   "This function is necessary to compute the correct starts for
   dataflow analysis. If only one predecessor of a node is changed, it
@@ -185,6 +177,15 @@
     (-> new-graph
         (set-values (into {} (map (juxt :node :value) outcomes)))
         (set-errors (into {} (map (juxt :node :error) outcomes))))))
+
+
+(defn kill
+  "Remove a set of nodes so that downstream nodes come into an errored state
+  because they are referring to dead nodes"
+  [g nodes]
+  (-> g
+      (set-errors (zipmap nodes (repeat ::dead)))
+      (advance nil nodes)))
 
 
 (defn recalc [g]
