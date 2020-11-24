@@ -184,9 +184,12 @@
   "Remove a set of nodes so that downstream nodes enter an error state because
   they are referring to dead nodes."
   [g nodes]
-  (-> g
-      (set-errors (zipmap nodes (repeat ::dead)))
-      (advance nil nodes)))
+  (let [downstream (mapcat (partial graph/successors g) nodes)]
+    (as-> g _
+        (apply graph/remove-nodes _ nodes)
+        (update _ :attrs #(apply dissoc % nodes))
+        (set-errors _ (zipmap downstream (repeat ::ref)))
+        (advance _ nil downstream))))
 
 (defn remove
   "Remove nodes in an orderly manner, by removing them from the graph and also
